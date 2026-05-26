@@ -14,7 +14,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000.
+Open http://localhost:3000
 
 The site works immediately on **local sample data** (~40 references, a couple
 hundred generated datapoints) — no database required. Submissions are validated
