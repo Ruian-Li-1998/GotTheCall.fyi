@@ -6,8 +6,9 @@ import type {
   Region,
   WatchModel,
 } from "@/lib/types";
-import type { SortValue } from "@/lib/constants";
+import { BRANDS, type SortValue } from "@/lib/constants";
 import { computeStats, median } from "@/lib/stats";
+import { slugify } from "@/lib/format";
 import { SEED_MODELS } from "@/lib/seed/models";
 import { SEED_DATAPOINTS } from "@/lib/seed/datapoints";
 import { getReadClient, hasSupabaseConfig } from "@/lib/supabase/server";
@@ -42,6 +43,31 @@ export type Overview = {
   modelsCovered: number;
   medianWaitMonths: number | null;
   hardest: LeaderboardRow | null;
+};
+
+/** One brand tile in the browse drill-down. */
+export type BrandSummary = {
+  brand: string;
+  slug: string;
+  /** distinct model lines (collections) under the brand */
+  collectionCount: number;
+  /** distinct references (watches) under the brand */
+  watchCount: number;
+  datapointCount: number;
+  medianWaitMonths: number | null;
+};
+
+/** One collection (model line) tile within a brand. */
+export type CollectionSummary = {
+  brand: string;
+  /** the model-line name, e.g. "Cosmograph Daytona" */
+  model: string;
+  /** slugify(model) */
+  slug: string;
+  watchCount: number;
+  datapointCount: number;
+  medianWaitMonths: number | null;
+  medianSpendUsd: number | null;
 };
 
 /* ------------------------------------------------------------------ */
@@ -192,8 +218,115 @@ export async function getModelStats(slug: string): Promise<ModelStats> {
   return computeStats(rows);
 }
 
-async function buildLeaderboardRows(minCount: number): Promise<LeaderboardRow[]> {
+/* ---- Browse drill-down: brand → collection → watch ----------------- */
+
+/** All brands with aggregate counts, ordered by the canonical BRANDS list. */
+export async function getBrandSummaries(): Promise<BrandSummary[]> {
   const [models, datapoints] = await Promise.all([loadAllModels(), loadAllDatapoints()]);
+  const bySlug = groupBySlug(datapoints);
+
+  const byBrand = new Map<string, WatchModel[]>();
+  for (const m of models) {
+    const arr = byBrand.get(m.brand) ?? [];
+    arr.push(m);
+    byBrand.set(m.brand, arr);
+  }
+
+  const summaries: BrandSummary[] = [];
+  for (const [brand, brandModels] of byBrand) {
+    const collections = new Set(brandModels.map((m) => m.model));
+    const waits: number[] = [];
+    let datapointCount = 0;
+    for (const m of brandModels) {
+      const dps = bySlug.get(m.slug) ?? [];
+      datapointCount += dps.length;
+      for (const d of dps) waits.push(d.waitMonths);
+    }
+    summaries.push({
+      brand,
+      slug: slugify(brand),
+      collectionCount: collections.size,
+      watchCount: brandModels.length,
+      datapointCount,
+      medianWaitMonths: median(waits),
+    });
+  }
+
+  const order = new Map<string, number>(BRANDS.map((b, i) => [b, i]));
+  return summaries.sort(
+    (a, b) =>
+      (order.get(a.brand) ?? Infinity) - (order.get(b.brand) ?? Infinity) ||
+      a.brand.localeCompare(b.brand),
+  );
+}
+
+/** A brand and its collections (model lines), or null if the slug matches nothing. */
+export async function getBrandDetail(
+  brandSlug: string,
+): Promise<{ brand: string; collections: CollectionSummary[] } | null> {
+  const [models, datapoints] = await Promise.all([loadAllModels(), loadAllDatapoints()]);
+  const brandModels = models.filter((m) => slugify(m.brand) === brandSlug);
+  if (brandModels.length === 0) return null;
+  const brand = brandModels[0].brand;
+  const bySlug = groupBySlug(datapoints);
+
+  const byModel = new Map<string, WatchModel[]>();
+  for (const m of brandModels) {
+    const arr = byModel.get(m.model) ?? [];
+    arr.push(m);
+    byModel.set(m.model, arr);
+  }
+
+  const collections: CollectionSummary[] = [];
+  for (const [model, refs] of byModel) {
+    const waits: number[] = [];
+    const spends: number[] = [];
+    let datapointCount = 0;
+    for (const ref of refs) {
+      const dps = bySlug.get(ref.slug) ?? [];
+      datapointCount += dps.length;
+      for (const d of dps) {
+        waits.push(d.waitMonths);
+        spends.push(d.spendBeforeUsd);
+      }
+    }
+    collections.push({
+      brand,
+      model,
+      slug: slugify(model),
+      watchCount: refs.length,
+      datapointCount,
+      medianWaitMonths: median(waits),
+      medianSpendUsd: median(spends),
+    });
+  }
+
+  collections.sort((a, b) => b.watchCount - a.watchCount || a.model.localeCompare(b.model));
+  return { brand, collections };
+}
+
+/** The watches (references) in one collection as LeaderboardRows, or null. */
+export async function getCollectionDetail(
+  brandSlug: string,
+  collectionSlug: string,
+): Promise<{ brand: string; collection: string; watches: LeaderboardRow[] } | null> {
+  const [models, datapoints] = await Promise.all([loadAllModels(), loadAllDatapoints()]);
+  const matches = models.filter(
+    (m) => slugify(m.brand) === brandSlug && slugify(m.model) === collectionSlug,
+  );
+  if (matches.length === 0) return null;
+  const bySlug = groupBySlug(datapoints);
+  const watches = matches
+    .map((m) => rowFor(m, bySlug.get(m.slug) ?? []))
+    .sort(
+      (a, b) =>
+        b.count - a.count || a.model.reference.localeCompare(b.model.reference),
+    );
+  return { brand: matches[0].brand, collection: matches[0].model, watches };
+}
+
+/** Index datapoints by their model slug (skipping free-text "Other" entries). */
+function groupBySlug(datapoints: Datapoint[]): Map<string, Datapoint[]> {
   const bySlug = new Map<string, Datapoint[]>();
   for (const d of datapoints) {
     if (!d.modelSlug) continue;
@@ -201,16 +334,27 @@ async function buildLeaderboardRows(minCount: number): Promise<LeaderboardRow[]>
     arr.push(d);
     bySlug.set(d.modelSlug, arr);
   }
+  return bySlug;
+}
+
+/** Aggregate one model's datapoints into a LeaderboardRow (no minimum count). */
+function rowFor(model: WatchModel, dps: Datapoint[]): LeaderboardRow {
+  return {
+    model,
+    count: dps.length,
+    medianWaitMonths: median(dps.map((d) => d.waitMonths)),
+    medianSpendUsd: median(dps.map((d) => d.spendBeforeUsd)),
+  };
+}
+
+async function buildLeaderboardRows(minCount: number): Promise<LeaderboardRow[]> {
+  const [models, datapoints] = await Promise.all([loadAllModels(), loadAllDatapoints()]);
+  const bySlug = groupBySlug(datapoints);
   const rows: LeaderboardRow[] = [];
   for (const model of models) {
-    const rowsForModel = bySlug.get(model.slug) ?? [];
-    if (rowsForModel.length < minCount) continue;
-    rows.push({
-      model,
-      count: rowsForModel.length,
-      medianWaitMonths: median(rowsForModel.map((d) => d.waitMonths)),
-      medianSpendUsd: median(rowsForModel.map((d) => d.spendBeforeUsd)),
-    });
+    const dps = bySlug.get(model.slug) ?? [];
+    if (dps.length < minCount) continue;
+    rows.push(rowFor(model, dps));
   }
   return rows;
 }

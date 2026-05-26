@@ -27,6 +27,19 @@ export const BRANDS = [
   "Richard Mille",
 ] as const;
 
+/** Brand → primary domain, used to fetch brand logos from logo.dev (keys off domain). */
+export const BRAND_DOMAINS: Record<string, string> = {
+  Rolex: "rolex.com",
+  "Patek Philippe": "patek.com",
+  "Audemars Piguet": "audemarspiguet.com",
+  Omega: "omegawatches.com",
+  Tudor: "tudorwatch.com",
+  Cartier: "cartier.com",
+  "Vacheron Constantin": "vacheron-constantin.com",
+  "A. Lange & Söhne": "alange-soehne.com",
+  "Richard Mille": "richardmille.com",
+};
+
 /** Map of country -> region bucket, used to derive a region for filtering. */
 export const COUNTRY_TO_REGION: Record<string, Region> = {
   "United States": "North America",

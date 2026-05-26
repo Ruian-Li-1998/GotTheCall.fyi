@@ -60,6 +60,8 @@ export function formatDateFull(iso: string | null | undefined): string {
 export function slugify(s: string): string {
   return s
     .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "") // strip accents: ö → o, é → e
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");

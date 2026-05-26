@@ -2,15 +2,23 @@ import Link from "next/link";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { Container, SectionHeading, buttonClasses } from "@/components/ui";
 import { ModelCard } from "@/components/model-card";
+import { BrowseCard } from "@/components/browse-card";
 import { DatapointTable } from "@/components/datapoint-table";
-import { getLeaderboards, getOverview, getRecentDatapoints } from "@/lib/queries";
-import { formatMonthsLong } from "@/lib/format";
+import {
+  getBrandSummaries,
+  getLeaderboards,
+  getOverview,
+  getRecentDatapoints,
+} from "@/lib/queries";
+import { formatMonthsLong, pluralize } from "@/lib/format";
+import { brandLogoUrl } from "@/lib/logos";
 
 export default async function HomePage() {
-  const [overview, { hardest }, recent] = await Promise.all([
+  const [overview, { hardest }, recent, brands] = await Promise.all([
     getOverview(),
     getLeaderboards(),
     getRecentDatapoints(6),
+    getBrandSummaries(),
   ]);
 
   const stats = [
@@ -60,6 +68,37 @@ export default async function HomePage() {
           </dl>
         </Container>
       </section>
+
+      {/* Browse by brand — primary entry into the drill-down */}
+      <Container className="pt-14">
+        <SectionHeading
+          title="Browse by brand"
+          description="Pick a brand, then a collection, then a reference to see its acquisition data."
+          action={
+            <Link
+              href="/brands"
+              className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
+            >
+              All brands <ArrowUpRight className="h-4 w-4" />
+            </Link>
+          }
+        />
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {brands.map((b) => (
+            <BrowseCard
+              key={b.slug}
+              href={`/brands/${b.slug}`}
+              title={b.brand}
+              logoUrl={brandLogoUrl(b.brand) ?? undefined}
+              stats={[
+                { label: "Median wait", value: formatMonthsLong(b.medianWaitMonths) },
+                { label: "Collections", value: String(b.collectionCount) },
+              ]}
+              footnote={`${b.watchCount} ${pluralize(b.watchCount, "reference")} · ${b.datapointCount} ${pluralize(b.datapointCount, "report")}`}
+            />
+          ))}
+        </div>
+      </Container>
 
       {/* Hardest to get */}
       <Container className="py-14">

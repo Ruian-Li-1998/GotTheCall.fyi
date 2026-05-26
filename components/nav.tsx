@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { PhoneCall, Plus } from "lucide-react";
+import { Watch, Plus } from "lucide-react";
 import { buttonClasses } from "@/components/ui";
 import { Container } from "@/components/ui";
 
 const links = [
+  { href: "/brands", label: "Brands" },
   { href: "/data", label: "Browse data" },
   { href: "/leaderboards", label: "Leaderboards" },
   { href: "/about", label: "About" },
@@ -15,7 +16,7 @@ export function SiteNav() {
       <Container className="flex h-16 items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white">
-            <PhoneCall className="h-4 w-4" />
+            <Watch className="h-4 w-4" />
           </span>
           <span className="text-base font-semibold tracking-tight text-ink">
             Got the Call

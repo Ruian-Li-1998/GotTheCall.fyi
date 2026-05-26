@@ -22,6 +22,8 @@ but not stored until you connect Supabase.
 
 ## Features
 
+- **Browse by brand** (`/brands`) — drill down brand → collection → reference,
+  with brand logos.
 - **Browse** (`/data`) — filter/sort every datapoint by brand, dealer type,
   region, wait, spend, and more.
 - **Per-reference stats** (`/watch/[slug]`) — median wait, median spend-to-qualify,
@@ -44,10 +46,23 @@ but not stored until you connect Supabase.
 Reads use the public anon key; inserts run server-side with the service-role key
 (kept out of the browser). Row-level security exposes only approved rows.
 
+## Brand logos (optional)
+
+The brand browse shows real logos via [logo.dev](https://logo.dev). Add your
+**publishable** token to `.env.local`:
+
+```
+NEXT_PUBLIC_LOGO_DEV_TOKEN=pk_...
+```
+
+Use only the publishable `pk_` key (it's rendered into image URLs and is safe to
+expose) — never a secret `sk_` key. Without a token, brand cards fall back to a
+watch icon.
+
 ## Project structure
 
 ```
-app/                Routes: / · /data · /watch/[slug] · /leaderboards · /submit · /about
+app/                Routes: / · /brands · /data · /watch/[slug] · /leaderboards · /submit · /about
   submit/actions.ts Server action that validates + inserts a datapoint
 components/          UI primitives, table, filters, charts, forms
 lib/
