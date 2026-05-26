@@ -12,6 +12,15 @@ export function SiteFooter() {
             is chasing. Community-reported and unofficial — not affiliated with any
             brand or dealer.
           </p>
+          <p className="mt-4 text-xs text-gray-400">
+            Logos provided by{" "}
+            <a
+              href="https://logo.dev"
+              className="underline decoration-gray-300 underline-offset-2 hover:text-ink"
+            >
+              Logo.dev
+            </a>
+          </p>
         </div>
         <div className="flex gap-12 text-sm">
           <div className="flex flex-col gap-2">
